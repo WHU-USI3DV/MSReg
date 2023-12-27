@@ -1,0 +1,178 @@
+"""
+Model in Pytorch.
+"""
+
+import torch
+import torch.nn as nn
+import numpy as np
+import parses.parses as parses
+
+
+#DRnet
+class Comb_Conv(nn.Module):
+    def __init__(self,in_dim,out_dim):
+        super().__init__()
+        self.comb_layer=nn.Sequential(
+            nn.BatchNorm2d(in_dim),
+            nn.ReLU(),
+            nn.Conv2d(in_dim,out_dim,(1,3),1)
+        )
+    def forward(self,input):
+        return self.comb_layer(input)
+
+class Residual_Comb_Conv(nn.Module):
+    def __init__(self,in_dim,middle_dim,out_dim,Nei_in_SO3):
+        super().__init__()
+        self.Nei_in_SO3=Nei_in_SO3
+        self.comb_layer_in=nn.Sequential(
+            nn.BatchNorm2d(in_dim),
+            nn.ReLU(),
+            nn.Conv2d(in_dim,middle_dim,(1,3),1)
+        )
+        self.comb_layer_out=nn.Sequential(
+            nn.BatchNorm2d(middle_dim),
+            nn.ReLU(),
+            nn.Conv2d(middle_dim,out_dim,(1,3),1)
+        )
+        self.short_cut=False
+        if not in_dim==out_dim:
+            self.short_cut=True
+            self.short_cut_layer=nn.Sequential(
+            nn.BatchNorm2d(in_dim),
+            nn.ReLU(),
+            nn.Conv2d(in_dim,out_dim,(1,3),1)
+            )
+    
+    def data_process(self,data):
+        data=torch.squeeze(data)
+        if len(data.size())==2:
+            data=data[None,:,:]
+        data=data[:,:,self.Nei_in_SO3]
+        data=torch.reshape(data,[data.shape[0],data.shape[1],8,3])
+        return data
+
+    def forward(self,feat_input):#feat:bn*f*8
+        feat=self.data_process(feat_input)
+        feat=self.comb_layer_in(feat)
+        feat=self.data_process(feat)
+        feat=self.comb_layer_out(feat)[:,:,:,0]
+        if self.short_cut:
+            feat_sc=self.data_process(feat_input)
+            feat_sc=self.short_cut_layer(feat_sc)[:,:,:,0]
+        else:
+            feat_sc=feat_input
+        
+        return feat+feat_sc #output:bn*f*8
+
+class network(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg=cfg
+
+        self.Nei_in_SO3=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/Nei_Index_in_SO3_ordered_3.npy').astype(np.int).reshape([-1])).cuda()    #nei 8*12 readin
+        self.Rgroup_npy=np.load(f'{self.cfg.SO3_related_files}/Rotation_8.npy').astype(np.float32)
+        self.Rgroup=torch.from_numpy(self.Rgroup_npy).cuda()
+
+        self.Conv_in=nn.Sequential(nn.Conv2d(32,256,(1,3),1))
+        self.SO3_Conv_layers=nn.ModuleList([Residual_Comb_Conv(256,512,256,self.Nei_in_SO3)])
+        self.Conv_out=Comb_Conv(256,32)
+
+    def data_process(self,data):
+        data=torch.squeeze(data)
+        data=data[:,:,self.Nei_in_SO3]
+        data=torch.reshape(data,[data.shape[0],data.shape[1],8,3])
+        return data
+
+    def SO3_Conv(self,data):#data:bn,f,gn
+        data=self.data_process(data)
+        data=self.Conv_in(data)[:,:,:,0]
+        for layer in range(len(self.SO3_Conv_layers)):
+            data=self.SO3_Conv_layers[layer](data)
+        data=self.data_process(data)
+        data=self.Conv_out(data)[:,:,:,0]
+        return data
+
+        
+    def forward(self, feats):
+        feats_eqv=self.SO3_Conv(feats)# bn,f,gn
+        feats_eqv=feats_eqv+feats
+        feats_inv=torch.mean(feats_eqv,dim=-1)# bn,f
+
+        feats_eqv=feats_eqv/torch.clamp_min(torch.norm(feats_eqv,dim=1,keepdim=True),min=1e-4)
+        feats_inv=feats_inv/torch.clamp_min(torch.norm(feats_inv,dim=1,keepdim=True),min=1e-4)
+
+        return {'inv':feats_inv,'eqv':feats_eqv}
+
+class train(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg=cfg
+        self.net=network(self.cfg)
+        self.R_index_permu=torch.from_numpy(np.load(f'{self.cfg.SO3_related_files}/8_8.npy').astype(np.int)).cuda() 
+        
+    
+    def Des2DR(self,Des1,Des2):#before_rot after_rot
+        Des1=Des1[:,:,torch.reshape(self.R_index_permu,[-1])].reshape([Des1.shape[0],Des1.shape[1],8,8])
+        cor=torch.einsum('bfag,bfg->ba',Des1,Des2)
+        return torch.argmax(cor,dim=1)
+
+    def forward(self,data):
+        feats0=torch.squeeze(data['feats0']) # bn,32,8
+        feats1=torch.squeeze(data['feats1']) # bn,32,8
+        true_idxs=torch.squeeze(data['true_idx']) # bn
+        yoho_0=self.net(feats0)
+        yoho_1=self.net(feats1)
+        pre_idxs=self.Des2DR(yoho_0['eqv'],yoho_1['eqv'])
+        #pre_idxs=self.Des2DR(feats0,feats1)
+        part1_ability=torch.mean((pre_idxs==true_idxs).type(torch.float32))
+
+        return {'feats0_eqv_bf_conv':feats0,
+                'feats1_eqv_bf_conv':feats1,
+                'feats0_eqv_af_conv':yoho_0['eqv'],
+                'feats1_eqv_af_conv':yoho_1['eqv'],
+                'feats0_inv':yoho_0['inv'],
+                'feats1_inv':yoho_1['inv'],
+                'DR_pre_ability':part1_ability, # no use for partI
+                'DR_true_index':true_idxs,
+                'DR_pre_index':pre_idxs}        # no use for partI
+
+class test(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg=cfg
+        self.net=network(self.cfg)
+
+    def forward(self,group_feat):
+        return self.net(group_feat)
+
+
+
+name2network={  
+    'train':train,
+    'test':test
+}
+
+
+if __name__=='__main__':
+    Rgroup=np.load('./group_related/Rotation_8.npy')
+    R_perm=np.load('./group_related/8_8.npy').astype(np.int)
+    config,nouse=parses.get_config()
+    model=network(config).cuda()
+    model.eval()
+
+    feature_origin=np.random.rand(2,3)
+    feature=torch.from_numpy(np.einsum('ab,gcb->acg',feature_origin,Rgroup).astype(np.float32)).cuda()# 2*3*8
+    with torch.no_grad():
+        output_origin=model(feature)
+    output_origin_inv=output_origin['inv'].cpu().numpy()
+    output_origin=output_origin['eqv'].cpu().numpy()
+    
+    for i in range(8):
+        feature_i=feature_origin@Rgroup[i].T
+        feature_i=torch.from_numpy(np.einsum('ab,gcb->acg',feature_i,Rgroup).astype(np.float32)).cuda()# 2*3*8
+        with torch.no_grad():
+            output_i=model(feature_i)
+        output_i_inv=output_i['inv'].cpu().numpy()
+        output_i=output_i['eqv'].cpu().numpy()
+        print(np.max(np.abs(output_i-output_origin[:,:,R_perm[i]])))
+        print(np.max(np.abs(output_i_inv-output_origin_inv)))
