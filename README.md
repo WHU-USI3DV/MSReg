@@ -1,10 +1,11 @@
 ## A novel method for registration of MLS and stereo reconstructed point clouds
 
-**Abstract:** We present a new algorithm for cross-source point cloud registration between MLS point clouds and stereo-reconstructed point clouds. 
-To improve the registration performance in this task, our method has two key designs. Firstly, gravity prior is utilized to highlight features in specific directions to narrow the matching pair search and enhance the robustness and efficiency of rotation-equivariant descriptor construction. Secondly, to adapt to noise patterns of stereo-reconstructed point clouds, a novel disparity-weighted hypothesis scoring strategy is proposed to strengthen RANSAC-based transformation estimation. 
-We create two new cross-source point cloud registration datasets to evaluate cross-source registration algorithms. The proposed method achieves state-of-the-art performance with a $43.5\%$ higher registration recall on cross-source datasets and a $10\times \sim 70\times$ speedup faster than RANSAC-based baselines. 
+**Abstract:** Cross-source point cloud registration is a prerequisite for effectively leveraging the complementary information of multiple 3D sensors. However, existing point cloud registration methods have primarily focused on the registration of mono-source point clouds and typically fail to register cross-source data with varying noise patterns and capture characteristics.
+In this paper, we present a new algorithm for cross-source point cloud registration between MLS point clouds and stereo-reconstructed point clouds. 
+Our method has two key designs. Firstly, we design a novel descriptor with in-plane rotation-equivariance by leveraging the accessible gravity prior, yielding strong descriptiveness, better robustness, and improved efficiency. Secondly, based on the noise pattern of stereo-reconstructed point clouds, a novel disparity-weighted correspondence scoring strategy is proposed to strengthen the registration accuracy.
+In comparison to existing registration baselines, our method achieves a $43.5\%$ higher registration recall on cross-source datasets of KITTI and KITTI-360 and a $23.1\%$ higher registration recall on mono-source datasets of KITTI. Notably, our method also outperforms RANSAC-based methods in terms of computational efficiency with a $10\times \sim 70\times$ speedup. 
 
-<img src="imgs/MSReg.png" alt="project" style="zoom:50%;">
+<img src="imgs/MSReg.jpg" alt="project" style="zoom:50%;">
 
 
 ## Requirements
