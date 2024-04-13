@@ -1,4 +1,4 @@
-## A novel method for registration of MLS and stereo reconstructed point clouds
+## A novel method for registration of MLS and stereo reconstructed point clouds (IEEE TGRS 2024)
 
 **Abstract:** Cross-source point cloud registration is a prerequisite for effectively leveraging the complementary information of multiple 3D sensors. However, existing point cloud registration methods have primarily focused on the registration of mono-source point clouds and typically fail to register cross-source data with varying noise patterns and capture characteristics.
 In this paper, we present a new algorithm for cross-source point cloud registration between MLS point clouds and stereo-reconstructed point clouds. 
