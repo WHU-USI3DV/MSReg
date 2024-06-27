@@ -73,7 +73,7 @@ Specifically, The code has been tested with:
 The datasets and pretrained weights have been uploaded to Google Cloud:
 
 For training:
-- [KITTI_train](https://drive.google.com/file/d/1oMOzSANikyI3jdTIGOS-YJ5pYwpppyTN/view?usp=sharing);
+- [KITTI_train](https://drive.google.com/file/d/1jCJORiR7wmbskEvX26w7PBCiVD4Eycn6/view?usp=sharing);
 
 For testing:
 - [CTCS](https://drive.google.com/file/d/1EH6BFVfkvTD29i2-MNrZSELCDBzxCBv1/view?usp=sharing);
@@ -89,13 +89,14 @@ Datasets above contain the point clouds (.ply) and keypoints (.txt, 5000 per poi
 data/
 ├── origin_data/
     ├── kitti_train/
-    	└── 0/
+    	├── 0/
             ├── PointCloud/
             	├── cloud_bin_0.ply
             	├── ..
             	└── gt.log
             └── Keypoints/
             	└── cloud_bin_0Keypoints.txt
+    	└── icp/
     ├── CS/
     └── CTCS/
 ```

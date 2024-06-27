@@ -30,7 +30,7 @@ class generate_trainset:
                 'pc':[],
                 'pair':{}
                 }
-            pair_fns = glob.glob(f'/main/11_KITTI/01_odometry/icp/icp_train&valset/{i}_*') #for 555
+            pair_fns = glob.glob(f'{self.basedir}/icp/{i}_*') #for 555
             for fn in pair_fns:
                 trans = np.load(fn)
                 pair = str.split(fn,'/')[-1][:-4]
